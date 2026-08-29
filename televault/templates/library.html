@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ config.chat_title }} · TeleVault{% endblock %}
+{% block body_class %}app-body{% endblock %}
+{% block body %}
+<div class="app-frame">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="icon-button mobile-menu" type="button" data-sidebar-toggle aria-label="Open navigation">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M8.5 7.25h7a3.25 3.25 0 0 1 3.25 3.25v3A3.25 3.25 0 0 1 15.5 16.75h-7a3.25 3.25 0 0 1-3.25-3.25v-3A3.25 3.25 0 0 1 8.5 7.25Z"/><path class="mark-fill" d="m10.3 9.7 4.45 2.3-4.45 2.3V9.7Z"/></svg>
+        </span>
+        <span>TeleVault</span>
+      </a>
+    </div>
+    <form class="search-bar" action="/" method="get" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+      <input name="q" type="search" value="{{ query }}" placeholder="Search your library" aria-label="Search your library">
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <kbd>/</kbd>
+    </form>
+    <div class="topbar-actions">
+      <form method="post" action="/sync" class="sync-form" data-sync-form>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="sync-button" type="submit" data-sync-button>
+          <svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 9A7 7 0 0 1 18 6l2 2M17.9 15A7 7 0 0 1 6 18l-2-2"/></svg>
+          <span>Sync</span>
+        </button>
+      </form>
+      <div class="user-pill" title="Signed in as {{ config.web_username }}">
+        <span>{{ config.web_username[0]|upper }}</span>
+      </div>
+    </div>
+  </header>
+
+  <aside class="sidebar" data-sidebar>
+    <nav aria-label="Media library">
+      <p class="nav-label">Library</p>
+      <a class="nav-item {% if kind == 'all' %}active{% endif %}" href="/?kind=all&amp;sort={{ sort }}">
+        <svg viewBox="0 0 24 24"><path d="M4.5 5.5h6v6h-6zM13.5 5.5h6v6h-6zM4.5 14.5h6v4h-6zM13.5 14.5h6v4h-6z"/></svg>
+        <span>All media</span><em>{{ stats.total }}</em>
+      </a>
+      <a class="nav-item {% if kind == 'video' %}active{% endif %}" href="/?kind=video&amp;sort={{ sort }}">
+        <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="3"/><path d="m10 9 5 3-5 3V9Z"/></svg>
+        <span>Videos</span><em>{{ stats.videos }}</em>
+      </a>
+      <a class="nav-item {% if kind == 'photo' %}active{% endif %}" href="/?kind=photo&amp;sort={{ sort }}">
+        <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="m6.5 17 4.5-4 2.5 2 2-2 2.5 4"/></svg>
+        <span>Photos</span><em>{{ stats.photos }}</em>
+      </a>
+    </nav>
+    <div class="sidebar-source">
+      <p class="nav-label">Source</p>
+      <div class="source-card">
+        <span class="telegram-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m4 11 15-6-3 14-5-4-3 2 1-4 7-5-8 4-4-1Z"/></svg></span>
+        <div><strong>{{ config.chat_title }}</strong><span>{{ config.account_name }}</span></div>
+        <i class="online-dot" title="Connected"></i>
+      </div>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="storage-card">
+        <div class="storage-icon"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.6 2.6 7.8 7 10 4.4-2.2 7-5.4 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+        <div><strong>No originals stored</strong><span>Streamed from Telegram</span></div>
+      </div>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="logout-button" type="submit">
+          <svg viewBox="0 0 24 24"><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M14 8l4 4-4 4M9 12h9"/></svg>
+          Sign out
+        </button>
+      </form>
+    </div>
+  </aside>
+  <button class="sidebar-scrim" type="button" data-sidebar-scrim aria-label="Close navigation"></button>
+
+  <main class="library-main">
+    {% if telegram_error %}
+    <div class="connection-banner" role="alert">
+      <svg viewBox="0 0 24 24"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4M12 16.5v.1"/></svg>
+      <div><strong>Telegram connection needs attention</strong><span>{{ telegram_error }}</span></div>
+    </div>
+    {% endif %}
+
+    <section class="library-heading">
+      <div>
+        <span class="eyebrow"><span class="status-dot"></span> Live from Telegram</span>
+        <h1>{% if query %}Search results{% elif kind == 'video' %}Videos{% elif kind == 'photo' %}Photos{% else %}Your library{% endif %}</h1>
+        <p>{{ total }} item{% if total != 1 %}s{% endif %}{% if query %} matching “{{ query }}”{% else %} in {{ config.chat_title }}{% endif %}</p>
+      </div>
+      <div class="heading-stat">
+        <span>{{ stats.total }}</span>
+        <small>unique media</small>
+      </div>
+    </section>
+
+    <section class="filter-row" aria-label="Media filters">
+      <div class="filter-chips">
+        <a class="chip {% if kind == 'all' %}active{% endif %}" href="/?q={{ query|urlencode }}&amp;kind=all&amp;sort={{ sort }}">All</a>
+        <a class="chip {% if kind == 'video' %}active{% endif %}" href="/?q={{ query|urlencode }}&amp;kind=video&amp;sort={{ sort }}">Videos</a>
+        <a class="chip {% if kind == 'photo' %}active{% endif %}" href="/?q={{ query|urlencode }}&amp;kind=photo&amp;sort={{ sort }}">Photos</a>
+      </div>
+      <form class="sort-form" action="/" method="get">
+        <input type="hidden" name="q" value="{{ query }}">
+        <input type="hidden" name="kind" value="{{ kind }}">
+        <label for="sort">Sort</label>
+        <select id="sort" name="sort" data-auto-submit>
+          <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest</option>
+          <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest</option>
+          <option value="name" {% if sort == 'name' %}selected{% endif %}>Name</option>
+          <option value="largest" {% if sort == 'largest' %}selected{% endif %}>Largest</option>
+        </select>
+      </form>
+    </section>
+
+    {% if items %}
+    <section class="media-grid" aria-label="Media results">
+      {% for item in items %}
+      <article class="media-card">
+        <a class="thumbnail-link" href="/media/{{ item.id }}" aria-label="Open {{ item.title }}">
+          <img src="/thumbnail/{{ item.id }}" alt="" loading="lazy" width="640" height="360">
+          <span class="thumbnail-shade"></span>
+          {% if item.kind == 'video' %}
+          <span class="play-button" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z"/></svg></span>
+          {% endif %}
+          <span class="type-badge {{ item.kind }}">{{ item.kind }}</span>
+          {% if item.kind == 'video' and item.duration_seconds %}<span class="duration-badge">{{ item.duration_seconds|duration }}</span>{% endif %}
+        </a>
+        <div class="media-card-body">
+          <a href="/media/{{ item.id }}"><h2 title="{{ item.title }}">{{ item.title }}</h2></a>
+          <p><span>{{ item.message_date|date }}</span><i></i><span>{{ item.size_bytes|filesize }}</span></p>
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+
+    {% if pages > 1 %}
+    <nav class="pagination" aria-label="Pagination">
+      {% if page > 1 %}<a href="/?q={{ query|urlencode }}&amp;kind={{ kind }}&amp;sort={{ sort }}&amp;page={{ page - 1 }}" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></a>{% else %}<span class="disabled"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></span>{% endif %}
+      <p>Page <strong>{{ page }}</strong> of {{ pages }}</p>
+      {% if page < pages %}<a href="/?q={{ query|urlencode }}&amp;kind={{ kind }}&amp;sort={{ sort }}&amp;page={{ page + 1 }}" aria-label="Next page"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></a>{% else %}<span class="disabled"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></span>{% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <section class="empty-state">
+      <span><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="m9 10 6 4M15 10l-6 4"/></svg></span>
+      <h2>No media found</h2>
+      <p>{% if query %}Try another search or clear the filters.{% else %}Run Sync after adding photos or videos to your Telegram chat.{% endif %}</p>
+      {% if query %}<a class="secondary-button" href="/?kind={{ kind }}">Clear search</a>{% endif %}
+    </section>
+    {% endif %}
+  </main>
+
+  <div class="toast" data-toast role="status" aria-live="polite"></div>
+</div>
+{% endblock %}
+

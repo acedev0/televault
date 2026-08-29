@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }} · TeleVault{% endblock %}
+{% block body_class %}watch-body{% endblock %}
+{% block body %}
+<header class="watch-topbar">
+  <a class="brand" href="/">
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.5 7.25h7a3.25 3.25 0 0 1 3.25 3.25v3A3.25 3.25 0 0 1 15.5 16.75h-7a3.25 3.25 0 0 1-3.25-3.25v-3A3.25 3.25 0 0 1 8.5 7.25Z"/><path class="mark-fill" d="m10.3 9.7 4.45 2.3-4.45 2.3V9.7Z"/></svg></span>
+    <span>TeleVault</span>
+  </a>
+  <a class="back-link" href="/"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg>Back to library</a>
+</header>
+
+<main class="watch-layout">
+  <section class="watch-primary">
+    <div class="player-shell {% if item.kind == 'photo' %}photo-player{% endif %}">
+      {% if item.kind == 'video' %}
+      <video controls playsinline preload="metadata" poster="/thumbnail/{{ item.id }}">
+        <source src="/stream/{{ item.id }}" type="{{ item.mime_type }}">
+        Your browser cannot play this video format.
+      </video>
+      {% else %}
+      <img src="/stream/{{ item.id }}" alt="{{ item.title }}">
+      {% endif %}
+    </div>
+    <div class="watch-info">
+      <span class="watch-kind"><i></i>{{ item.kind }}</span>
+      <h1>{{ item.title }}</h1>
+      <div class="watch-meta">
+        <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>{{ item.message_date|date }}</span>
+        <span><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/></svg>{{ item.size_bytes|filesize }}</span>
+        {% if item.width and item.height %}<span><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="m8 15 3-3 2 2 2-2 2 3"/></svg>{{ item.width }}×{{ item.height }}</span>{% endif %}
+        {% if item.duration_seconds %}<span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m10 8 6 4-6 4V8Z"/></svg>{{ item.duration_seconds|duration }}</span>{% endif %}
+      </div>
+      {% if item.caption %}<div class="caption-box"><p>{{ item.caption }}</p></div>{% endif %}
+      <div class="source-strip">
+        <span class="telegram-glyph"><svg viewBox="0 0 24 24"><path d="m4 11 15-6-3 14-5-4-3 2 1-4 7-5-8 4-4-1Z"/></svg></span>
+        <div><strong>Streaming from {{ config.chat_title }}</strong><span>The original file remains in Telegram.</span></div>
+        <i class="online-dot"></i>
+      </div>
+    </div>
+  </section>
+
+  <aside class="related-panel">
+    <div class="related-heading"><div><span>Up next</span><h2>More from your vault</h2></div><a href="/">View all</a></div>
+    <div class="related-list">
+      {% for related_item in related %}
+      <a class="related-card" href="/media/{{ related_item.id }}">
+        <span class="related-thumb">
+          <img src="/thumbnail/{{ related_item.id }}" alt="" loading="lazy" width="240" height="135">
+          {% if related_item.duration_seconds %}<em>{{ related_item.duration_seconds|duration }}</em>{% endif %}
+        </span>
+        <span class="related-copy"><strong>{{ related_item.title }}</strong><small>{{ related_item.message_date|date }} · {{ related_item.size_bytes|filesize }}</small></span>
+      </a>
+      {% else %}
+      <p class="no-related">No other media has been indexed yet.</p>
+      {% endfor %}
+    </div>
+  </aside>
+</main>
+{% endblock %}
+

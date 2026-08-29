@@ -1,0 +1,117 @@
+import os
+from dataclasses import replace
+from datetime import datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
+
+from televault.config import AppSecrets, SecretVault
+from televault.database import Database, MediaRecord
+from televault.indexer import record_from_message
+from televault.security import hash_password, verify_password
+
+
+def sample_config() -> AppSecrets:
+    return AppSecrets(
+        version=1,
+        api_id=12345,
+        api_hash="a" * 32,
+        string_session="session-secret",
+        chat_reference="@vault",
+        chat_id=-100123,
+        chat_title="Vault",
+        account_name="Ace",
+        web_username="ace",
+        password_hash=hash_password("a-long-password"),
+        cookie_secret="c" * 64,
+        port=8181,
+    )
+
+
+def sample_record(message_id=10, dedupe_key="video:900") -> MediaRecord:
+    return MediaRecord(
+        chat_id=-100123,
+        message_id=message_id,
+        dedupe_key=dedupe_key,
+        kind="video",
+        title="Example video",
+        filename="example.mp4",
+        caption="caption",
+        mime_type="video/mp4",
+        size_bytes=4096,
+        duration_seconds=42,
+        width=1920,
+        height=1080,
+        message_date="2026-08-29T12:00:00+00:00",
+    )
+
+
+def test_password_hash_and_verify():
+    encoded = hash_password("a-long-password")
+    assert encoded.startswith("$argon2id$")
+    assert verify_password(encoded, "a-long-password")
+    assert not verify_password(encoded, "wrong-password")
+
+
+def test_encrypted_vault_round_trip_and_permissions(tmp_path):
+    vault = SecretVault(tmp_path / "state")
+    original = sample_config()
+    vault.save(original)
+    restored = vault.load()
+    assert restored.api_hash == original.api_hash
+    assert restored.string_session == original.string_session
+    assert restored.port == 8181
+    assert oct(os.stat(vault.key_path).st_mode & 0o777) == "0o600"
+    assert oct(os.stat(vault.secrets_path).st_mode & 0o777) == "0o600"
+    assert b"session-secret" not in vault.secrets_path.read_bytes()
+
+
+def test_database_deduplicates_same_telegram_media(tmp_path):
+    database = Database(tmp_path / "media.db")
+    database.initialise()
+    first_id, first_new, _ = database.upsert_media(sample_record(message_id=10))
+    second_id, second_new, _ = database.upsert_media(sample_record(message_id=22))
+    assert first_id == second_id
+    assert first_new is True
+    assert second_new is False
+    assert database.stats() == {"total": 1, "videos": 1, "photos": 0}
+    assert database.get_media(first_id)["message_id"] == 22
+
+
+def test_database_search_filter_and_pagination(tmp_path):
+    database = Database(tmp_path / "media.db")
+    database.initialise()
+    database.upsert_media(sample_record())
+    photo = replace(
+        sample_record(message_id=11, dedupe_key="photo:901"),
+        kind="photo",
+        title="Summer photo",
+        filename="summer.jpg",
+        mime_type="image/jpeg",
+    )
+    database.upsert_media(photo)
+    rows, total = database.list_media(query="summer", kind="photo")
+    assert total == 1
+    assert rows[0]["title"] == "Summer photo"
+
+
+def test_extracts_video_metadata_from_message():
+    file = SimpleNamespace(
+        mime_type="video/mp4", name="My_Cool_Video.mp4", width=1280, height=720, duration=12.8, size=1234
+    )
+    document = SimpleNamespace(id=555, attributes=[])
+    message = SimpleNamespace(
+        id=77,
+        file=file,
+        photo=None,
+        document=document,
+        video=document,
+        video_note=None,
+        message="A caption",
+        date=datetime(2026, 8, 29, tzinfo=timezone.utc),
+    )
+    record = record_from_message(message, -100123)
+    assert record is not None
+    assert record.kind == "video"
+    assert record.dedupe_key == "video:555"
+    assert record.title == "My Cool Video"
+    assert record.duration_seconds == 12

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Sign in · TeleVault{% endblock %}
+{% block body_class %}login-body{% endblock %}
+{% block body %}
+<main class="login-shell">
+  <section class="login-story" aria-label="TeleVault introduction">
+    <a class="brand brand-large" href="/login" aria-label="TeleVault home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M8.5 7.25h7a3.25 3.25 0 0 1 3.25 3.25v3A3.25 3.25 0 0 1 15.5 16.75h-7a3.25 3.25 0 0 1-3.25-3.25v-3A3.25 3.25 0 0 1 8.5 7.25Z"/><path class="mark-fill" d="m10.3 9.7 4.45 2.3-4.45 2.3V9.7Z"/></svg>
+      </span>
+      <span>TeleVault</span>
+    </a>
+    <div class="login-copy">
+      <span class="eyebrow"><span class="status-dot"></span> Private media, on demand</span>
+      <h1>Your Telegram library.<br><span>Nothing copied.</span></h1>
+      <p>Browse and stream your private collection while every original stays inside Telegram.</p>
+    </div>
+    <div class="trust-row" aria-label="Storage details">
+      <div><strong>0 GB</strong><span>originals stored</span></div>
+      <div><strong>Range</strong><span>streaming &amp; seeking</span></div>
+      <div><strong>Local</strong><span>encrypted session</span></div>
+    </div>
+  </section>
+
+  <section class="login-panel">
+    <div class="login-card">
+      <div class="login-heading">
+        <span class="lock-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="3"/><path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10"/></svg>
+        </span>
+        <div>
+          <p class="kicker">Private access</p>
+          <h2>Welcome back</h2>
+        </div>
+      </div>
+      <p class="login-subtitle">Sign in to open your media library.</p>
+
+      {% if configuration_error %}
+      <div class="alert alert-error" role="alert">
+        <strong>Setup required</strong>
+        <span>{{ configuration_error }}</span>
+      </div>
+      {% endif %}
+      {% if error %}
+      <div class="alert alert-error" role="alert">
+        <strong>Couldn’t sign in</strong>
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form class="login-form" method="post" action="/login" autocomplete="on">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label for="username">Username</label>
+        <div class="field-wrap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 19c.7-3.2 3-5 6.5-5s5.8 1.8 6.5 5"/></svg>
+          <input id="username" name="username" type="text" required autofocus autocomplete="username" placeholder="Your username" maxlength="32">
+        </div>
+        <label for="password">Password</label>
+        <div class="field-wrap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="3"/><path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10"/></svg>
+          <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Your password">
+        </div>
+        <button class="primary-button" type="submit" {% if configuration_error %}disabled{% endif %}>
+          Open library
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+        </button>
+      </form>
+      <p class="http-note"><span aria-hidden="true">●</span> Use this HTTP login only on a trusted network or private VPN.</p>
+    </div>
+  </section>
+</main>
+{% endblock %}
+

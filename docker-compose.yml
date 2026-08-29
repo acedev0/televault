@@ -1,0 +1,12 @@
+services:
+  televault:
+    build: .
+    container_name: televault
+    restart: unless-stopped
+    ports:
+      - "8181:8181"
+    environment:
+      TELEVAULT_DATA_DIR: /data
+    volumes:
+      - ./data:/data
+
