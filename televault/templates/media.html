@@ -14,7 +14,7 @@
   <section class="watch-primary">
     <div class="player-shell {% if item.kind == 'photo' %}photo-player{% endif %}">
       {% if item.kind == 'video' %}
-      <video controls playsinline preload="metadata" poster="/thumbnail/{{ item.id }}">
+      <video controls playsinline preload="metadata" poster="/thumbnail/{{ item.id }}?v=2">
         <source src="/stream/{{ item.id }}" type="{{ item.mime_type }}">
         Your browser cannot play this video format.
       </video>
@@ -46,7 +46,7 @@
       {% for related_item in related %}
       <a class="related-card" href="/media/{{ related_item.id }}">
         <span class="related-thumb">
-          <img src="/thumbnail/{{ related_item.id }}" alt="" loading="lazy" width="240" height="135">
+          <img src="/thumbnail/{{ related_item.id }}?v=2" alt="" loading="lazy" width="240" height="135">
           {% if related_item.duration_seconds %}<em>{{ related_item.duration_seconds|duration }}</em>{% endif %}
         </span>
         <span class="related-copy"><strong>{{ related_item.title }}</strong><small>{{ related_item.message_date|date }} · {{ related_item.size_bytes|filesize }}</small></span>
@@ -58,4 +58,3 @@
   </aside>
 </main>
 {% endblock %}
-

@@ -7,22 +7,16 @@ A private, YouTube-style media library backed directly by one Telegram chat.
 - Videos support HTTP byte ranges, so browsers can seek without downloading the complete file.
 - Photos are fetched into memory when viewed and are never saved as originals.
 - Exact Telegram media duplicates are collapsed into one library item.
+- The complete library loads on one continuously scrolling page with no numbered pagination.
+- Thumbnails preserve the full landscape or portrait image without cropping.
 
 ## One-command VPS installation
 
-For a public repository, log in to a fresh VPS as root and run:
+Log in to a fresh VPS as root and run:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/acedev0/televault/main/install.sh)
 ```
-
-While the repository is private, install and authenticate GitHub CLI on the VPS, then run:
-
-```bash
-export GH_TOKEN="$(gh auth token)"; bash <(gh api -H "Accept: application/vnd.github.raw+json" repos/acedev0/televault/contents/install.sh)
-```
-
-The token is passed to Git through a temporary `GIT_ASKPASS` helper and is not inserted into the Git remote URL.
 
 The installer asks for, in order:
 
@@ -42,6 +36,16 @@ http://YOUR-SERVER-IP:8181
 ```
 
 Supported VPS systems: Ubuntu, Debian, AlmaLinux, and Rocky Linux with systemd.
+
+## Update an existing installation
+
+Run one command:
+
+```bash
+curl -Ls https://raw.githubusercontent.com/acedev0/televault/main/install.sh | sudo bash
+```
+
+The v1.2 update keeps the existing Telegram login, selected chat, port, website username, password, and database. It automatically refreshes old thumbnails once so portrait and landscape previews use the new uncropped layout; no separate repair command is required.
 
 ## Get Telegram API credentials
 

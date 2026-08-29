@@ -4,9 +4,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from televault.config import AppSecrets, SecretVault
 from televault.database import Database, MediaRecord
-from televault.indexer import record_from_message
+from televault.indexer import IndexManager, record_from_message
 from televault.security import hash_password, verify_password
 
 
@@ -77,7 +79,7 @@ def test_database_deduplicates_same_telegram_media(tmp_path):
     assert database.get_media(first_id)["message_id"] == 22
 
 
-def test_database_search_filter_and_pagination(tmp_path):
+def test_database_search_filter_and_offset_loading(tmp_path):
     database = Database(tmp_path / "media.db")
     database.initialise()
     database.upsert_media(sample_record())
@@ -92,6 +94,62 @@ def test_database_search_filter_and_pagination(tmp_path):
     rows, total = database.list_media(query="summer", kind="photo")
     assert total == 1
     assert rows[0]["title"] == "Summer photo"
+    rows, total = database.list_media(per_page=1, offset=1, sort="newest")
+    assert total == 2
+    assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_thumbnail_upgrade_refreshes_an_existing_preview(tmp_path):
+    database = Database(tmp_path / "media.db")
+    database.initialise()
+    media_id, _, _ = database.upsert_media(sample_record())
+    thumbnail_dir = tmp_path / "thumbnails"
+    thumbnail_dir.mkdir()
+    existing = thumbnail_dir / f"{media_id}.webp"
+    existing.write_bytes(b"old-preview")
+    database.set_thumbnail(media_id, existing.name)
+
+    file = SimpleNamespace(
+        mime_type="video/mp4",
+        name="example.mp4",
+        width=1920,
+        height=1080,
+        duration=42,
+        size=4096,
+    )
+    document = SimpleNamespace(id=900, attributes=[])
+    message = SimpleNamespace(
+        id=10,
+        file=file,
+        photo=None,
+        document=document,
+        video=document,
+        video_note=None,
+        message="caption",
+        date=datetime(2026, 8, 29, 12, 0, tzinfo=timezone.utc),
+    )
+
+    class FakeTelegram:
+        config = SimpleNamespace(chat_id=-100123)
+
+        def iter_messages(self, **kwargs):
+            async def messages():
+                yield message
+
+            return messages()
+
+        async def build_thumbnail(self, telegram_message, destination):
+            destination.write_bytes(b"new-preview")
+            return True
+
+    result = await IndexManager(database, FakeTelegram(), thumbnail_dir).scan(
+        full=True,
+        rebuild_thumbnails=True,
+    )
+
+    assert result.thumbnails == 1
+    assert existing.read_bytes() == b"new-preview"
 
 
 def test_extracts_video_metadata_from_message():

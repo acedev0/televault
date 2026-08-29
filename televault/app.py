@@ -176,7 +176,7 @@ def create_app(
 
     app = FastAPI(
         title="TeleVault",
-        version="1.1.0",
+        version="1.2.0",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -289,19 +289,16 @@ def create_app(
         query = request.query_params.get("q", "")[:120]
         kind = request.query_params.get("kind", "all")
         sort = request.query_params.get("sort", "newest")
-        try:
-            page = max(1, int(request.query_params.get("page", "1")))
-        except ValueError:
-            page = 1
+        kind = kind if kind in {"all", "video", "photo"} else "all"
+        sort = sort if sort in {"newest", "oldest", "name", "largest"} else "newest"
+        batch_size = 36
         items, total = database.list_media(
-            query=query, kind=kind, page=page, per_page=36, sort=sort
+            query=query,
+            kind=kind,
+            per_page=batch_size,
+            sort=sort,
+            offset=0,
         )
-        pages = max(1, math.ceil(total / 36))
-        if page > pages and total:
-            return RedirectResponse(
-                f"/?q={quote(query)}&kind={quote(kind)}&sort={quote(sort)}&page={pages}",
-                status_code=303,
-            )
         response = templates.TemplateResponse(
             request,
             "library.html",
@@ -312,8 +309,7 @@ def create_app(
                 "query": query,
                 "kind": kind,
                 "sort": sort,
-                "page": page,
-                "pages": pages,
+                "has_more": len(items) < total,
                 "csrf": _csrf_token(request),
                 "config": config,
                 "last_scan_at": database.get_meta("last_scan_at"),
@@ -321,6 +317,39 @@ def create_app(
             },
         )
         response.headers["Cache-Control"] = "private, no-store"
+        return response
+
+    @app.get("/api/media", response_class=HTMLResponse)
+    async def media_batch(request: Request):
+        if config is None or not _is_authenticated(request, config):
+            return Response(status_code=401)
+        query = request.query_params.get("q", "")[:120]
+        kind = request.query_params.get("kind", "all")
+        sort = request.query_params.get("sort", "newest")
+        kind = kind if kind in {"all", "video", "photo"} else "all"
+        sort = sort if sort in {"newest", "oldest", "name", "largest"} else "newest"
+        try:
+            offset = max(0, int(request.query_params.get("offset", "0")))
+        except ValueError:
+            offset = 0
+        batch_size = 36
+        items, total = database.list_media(
+            query=query,
+            kind=kind,
+            per_page=batch_size,
+            sort=sort,
+            offset=offset,
+        )
+        next_offset = offset + len(items)
+        response = templates.TemplateResponse(
+            request,
+            "media_cards.html",
+            {"items": items},
+        )
+        response.headers["Cache-Control"] = "private, no-store"
+        response.headers["X-Next-Offset"] = str(next_offset)
+        response.headers["X-Has-More"] = "true" if next_offset < total else "false"
+        response.headers["X-Total-Count"] = str(total)
         return response
 
     @app.get("/media/{media_id}", response_class=HTMLResponse)

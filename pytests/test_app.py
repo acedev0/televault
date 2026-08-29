@@ -131,6 +131,51 @@ def test_login_library_and_security_headers(tmp_path):
         assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
 
+def test_library_uses_infinite_scroll_without_numbered_pages(tmp_path):
+    make_config(tmp_path)
+    database = Database(tmp_path / "televault.db")
+    for message_id in range(12, 55):
+        database.upsert_media(
+            MediaRecord(
+                chat_id=-100123,
+                message_id=message_id,
+                dedupe_key=f"photo:{message_id}",
+                kind="photo",
+                title=f"Library item {message_id}",
+                filename=f"item-{message_id}.jpg",
+                caption="",
+                mime_type="image/jpeg",
+                size_bytes=message_id * 100,
+                duration_seconds=0,
+                width=1080 if message_id == 54 else 1920,
+                height=1920 if message_id == 54 else 1080,
+                message_date="2026-08-29T13:00:00+00:00",
+            )
+        )
+    app = create_app(tmp_path, telegram_factory=FakeTelegram)
+    with TestClient(app) as client:
+        login(client)
+        first_batch = client.get("/")
+        assert first_batch.status_code == 200
+        assert first_batch.text.count('data-media-id="') == 36
+        assert "data-infinite-loader" in first_batch.text
+        assert "media-card portrait" in first_batch.text
+        assert 'aria-label="Pagination"' not in first_batch.text
+
+        second_batch = client.get("/api/media?offset=36")
+        assert second_batch.status_code == 200
+        assert second_batch.text.count('data-media-id="') == 9
+        assert second_batch.headers["x-next-offset"] == "45"
+        assert second_batch.headers["x-has-more"] == "false"
+
+
+def test_infinite_scroll_endpoint_requires_login(tmp_path):
+    make_config(tmp_path)
+    app = create_app(tmp_path, telegram_factory=FakeTelegram)
+    with TestClient(app) as client:
+        assert client.get("/api/media?offset=36").status_code == 401
+
+
 def test_invalid_password_rejected(tmp_path):
     make_config(tmp_path)
     app = create_app(tmp_path, telegram_factory=FakeTelegram)
@@ -183,4 +228,3 @@ def test_stream_requires_login(tmp_path):
     app = create_app(tmp_path, telegram_factory=FakeTelegram)
     with TestClient(app) as client:
         assert client.get("/stream/1").status_code == 401
-

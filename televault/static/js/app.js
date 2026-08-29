@@ -15,6 +15,79 @@
     control.addEventListener("change", () => control.form?.submit());
   });
 
+  const mediaGrid = document.querySelector("[data-media-grid]");
+  const infiniteLoader = document.querySelector("[data-infinite-loader]");
+  if (mediaGrid && infiniteLoader) {
+    const loaderMessage = infiniteLoader.querySelector("[data-loader-message]");
+    const retryButton = infiniteLoader.querySelector("[data-loader-retry]");
+    let loading = false;
+    let hasMore = true;
+    let observer;
+
+    const loadMore = async () => {
+      if (loading || !hasMore) return;
+      loading = true;
+      mediaGrid.setAttribute("aria-busy", "true");
+      infiniteLoader.classList.remove("failed");
+      if (loaderMessage) loaderMessage.textContent = "Loading more media…";
+      try {
+        const url = new URL("/api/media", window.location.origin);
+        const current = new URLSearchParams(window.location.search);
+        ["q", "kind", "sort"].forEach((key) => {
+          const value = current.get(key);
+          if (value) url.searchParams.set(key, value);
+        });
+        url.searchParams.set("offset", infiniteLoader.dataset.offset || "0");
+        const response = await fetch(url, {
+          headers: { Accept: "text/html", "X-Requested-With": "TeleVault" },
+        });
+        if (response.status === 401) {
+          window.location.assign("/login");
+          return;
+        }
+        if (!response.ok) throw new Error("Media request failed");
+        const markup = await response.text();
+        if (markup.trim()) mediaGrid.insertAdjacentHTML("beforeend", markup);
+        infiniteLoader.dataset.offset = response.headers.get("X-Next-Offset") || infiniteLoader.dataset.offset || "0";
+        hasMore = response.headers.get("X-Has-More") === "true" && Boolean(markup.trim());
+        if (!hasMore) {
+          observer?.disconnect();
+          infiniteLoader.classList.add("complete");
+          if (loaderMessage) loaderMessage.textContent = "Everything is loaded";
+          window.setTimeout(() => infiniteLoader.remove(), 260);
+        }
+      } catch (error) {
+        observer?.unobserve(infiniteLoader);
+        infiniteLoader.classList.add("failed");
+        if (loaderMessage) loaderMessage.textContent = "Could not load more media";
+      } finally {
+        loading = false;
+        mediaGrid.setAttribute("aria-busy", "false");
+      }
+    };
+
+    retryButton?.addEventListener("click", () => {
+      observer?.observe(infiniteLoader);
+      loadMore();
+    });
+
+    if ("IntersectionObserver" in window) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) loadMore();
+        },
+        { rootMargin: "700px 0px" },
+      );
+      observer.observe(infiniteLoader);
+    } else {
+      const onScroll = () => {
+        if (infiniteLoader.getBoundingClientRect().top < window.innerHeight + 700) loadMore();
+      };
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    }
+  }
+
   const toast = document.querySelector("[data-toast]");
   let toastTimer;
   const showToast = (message, error = false) => {
@@ -84,4 +157,3 @@
     if (event.key === "Escape") setSidebar(false);
   });
 })();
-

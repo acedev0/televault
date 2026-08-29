@@ -149,6 +149,7 @@ class IndexManager:
         self,
         *,
         full: bool = False,
+        rebuild_thumbnails: bool = False,
         progress: ProgressCallback | None = None,
     ) -> IndexProgress:
         if self._scan_lock.locked():
@@ -159,6 +160,7 @@ class IndexManager:
             last_indexed = 0 if full else int(self.database.get_meta("last_message_id", "0") or 0)
             highest_message_id = last_indexed
             pending: set[asyncio.Task[bool]] = set()
+            scheduled_thumbnail_ids: set[int] = set()
             try:
                 async for message in self.telegram.iter_messages(min_id=last_indexed, reverse=True):
                     highest_message_id = max(highest_message_id, int(message.id))
@@ -180,7 +182,13 @@ class IndexManager:
                         current_title=record.title,
                     )
                     thumbnail_path = self.thumbnail_dir / (thumbnail_filename or "")
-                    if not thumbnail_filename or not thumbnail_path.is_file():
+                    needs_thumbnail = (
+                        rebuild_thumbnails
+                        or not thumbnail_filename
+                        or not thumbnail_path.is_file()
+                    )
+                    if needs_thumbnail and media_id not in scheduled_thumbnail_ids:
+                        scheduled_thumbnail_ids.add(media_id)
                         pending.add(asyncio.create_task(self._thumbnail_task(message, media_id)))
                     if len(pending) >= 8:
                         done, pending = await asyncio.wait(
@@ -224,4 +232,3 @@ class IndexManager:
                 raise
             await self._report(progress)
             return self._status
-

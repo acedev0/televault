@@ -1,0 +1,17 @@
+{% for item in items %}
+<article class="media-card{% if item.height and item.width and item.height > item.width %} portrait{% endif %}" data-media-id="{{ item.id }}">
+  <a class="thumbnail-link" href="/media/{{ item.id }}" aria-label="Open {{ item.title }}">
+    <img src="/thumbnail/{{ item.id }}?v=2" alt="" loading="lazy" width="720" height="405">
+    <span class="thumbnail-shade"></span>
+    {% if item.kind == 'video' %}
+    <span class="play-button" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z"/></svg></span>
+    {% endif %}
+    <span class="type-badge {{ item.kind }}">{{ item.kind }}</span>
+    {% if item.kind == 'video' and item.duration_seconds %}<span class="duration-badge">{{ item.duration_seconds|duration }}</span>{% endif %}
+  </a>
+  <div class="media-card-body">
+    <a href="/media/{{ item.id }}"><h2 title="{{ item.title }}">{{ item.title }}</h2></a>
+    <p><span>{{ item.message_date|date }}</span><i></i><span>{{ item.size_bytes|filesize }}</span></p>
+  </div>
+</article>
+{% endfor %}

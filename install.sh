@@ -8,6 +8,7 @@ INSTALL_ROOT="${TELEVAULT_INSTALL_ROOT:-/opt/televault}"
 APP_DIR="$INSTALL_ROOT/app"
 VENV_DIR="$INSTALL_ROOT/.venv"
 DATA_DIR="${TELEVAULT_DATA_DIR:-/var/lib/televault}"
+THUMBNAIL_LAYOUT_MARKER="$DATA_DIR/.thumbnail-layout-v2"
 REPOSITORY="${TELEVAULT_REPOSITORY:-acedev0/televault}"
 BRANCH="${TELEVAULT_BRANCH:-main}"
 REPOSITORY_URL="https://github.com/${REPOSITORY}.git"
@@ -113,6 +114,12 @@ if [[ ! -f "$DATA_DIR/secrets.enc" || "${TELEVAULT_RECONFIGURE:-0}" == "1" ]]; t
   runuser -u "$SERVICE_USER" -- bash -c "cd '$APP_DIR' && '$VENV_DIR/bin/python' -m televault --data-dir '$DATA_DIR' setup"
 else
   success "Existing encrypted configuration found; keeping it"
+fi
+
+if [[ -f "$DATA_DIR/secrets.enc" && ! -f "$THUMBNAIL_LAYOUT_MARKER" ]]; then
+  info "Upgrading existing thumbnails while preserving portrait and landscape orientation"
+  runuser -u "$SERVICE_USER" -- bash -c "cd '$APP_DIR' && '$VENV_DIR/bin/python' -m televault --data-dir '$DATA_DIR' upgrade-thumbnails"
+  success "Existing thumbnails upgraded"
 fi
 
 RUNTIME_ENV="$DATA_DIR/runtime.env"

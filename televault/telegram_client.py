@@ -121,13 +121,9 @@ class TelegramMediaClient:
             try:
                 with Image.open(io.BytesIO(raw)) as source:
                     image = ImageOps.exif_transpose(source).convert("RGB")
-                    image.thumbnail((640, 360), Image.Resampling.LANCZOS)
-                    canvas = Image.new("RGB", (640, 360), "#111318")
-                    x = (640 - image.width) // 2
-                    y = (360 - image.height) // 2
-                    canvas.paste(image, (x, y))
+                    image.thumbnail((720, 720), Image.Resampling.LANCZOS)
                     destination.parent.mkdir(parents=True, exist_ok=True)
-                    canvas.save(destination, "WEBP", quality=78, method=4)
+                    image.save(destination, "WEBP", quality=82, method=4)
                     destination.chmod(0o600)
             except (OSError, ValueError):
                 return False

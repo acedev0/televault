@@ -116,32 +116,16 @@
     </section>
 
     {% if items %}
-    <section class="media-grid" aria-label="Media results">
-      {% for item in items %}
-      <article class="media-card">
-        <a class="thumbnail-link" href="/media/{{ item.id }}" aria-label="Open {{ item.title }}">
-          <img src="/thumbnail/{{ item.id }}" alt="" loading="lazy" width="640" height="360">
-          <span class="thumbnail-shade"></span>
-          {% if item.kind == 'video' %}
-          <span class="play-button" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 7 8 5-8 5V7Z"/></svg></span>
-          {% endif %}
-          <span class="type-badge {{ item.kind }}">{{ item.kind }}</span>
-          {% if item.kind == 'video' and item.duration_seconds %}<span class="duration-badge">{{ item.duration_seconds|duration }}</span>{% endif %}
-        </a>
-        <div class="media-card-body">
-          <a href="/media/{{ item.id }}"><h2 title="{{ item.title }}">{{ item.title }}</h2></a>
-          <p><span>{{ item.message_date|date }}</span><i></i><span>{{ item.size_bytes|filesize }}</span></p>
-        </div>
-      </article>
-      {% endfor %}
+    <section class="media-grid" aria-label="Media results" data-media-grid aria-busy="false">
+      {% include "media_cards.html" %}
     </section>
 
-    {% if pages > 1 %}
-    <nav class="pagination" aria-label="Pagination">
-      {% if page > 1 %}<a href="/?q={{ query|urlencode }}&amp;kind={{ kind }}&amp;sort={{ sort }}&amp;page={{ page - 1 }}" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></a>{% else %}<span class="disabled"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></span>{% endif %}
-      <p>Page <strong>{{ page }}</strong> of {{ pages }}</p>
-      {% if page < pages %}<a href="/?q={{ query|urlencode }}&amp;kind={{ kind }}&amp;sort={{ sort }}&amp;page={{ page + 1 }}" aria-label="Next page"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></a>{% else %}<span class="disabled"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></span>{% endif %}
-    </nav>
+    {% if has_more %}
+    <div class="infinite-loader" data-infinite-loader data-offset="{{ items|length }}" data-total="{{ total }}" role="status" aria-live="polite">
+      <span class="loader-spinner" aria-hidden="true"></span>
+      <p data-loader-message>Loading more media…</p>
+      <button type="button" data-loader-retry>Retry</button>
+    </div>
     {% endif %}
     {% else %}
     <section class="empty-state">
@@ -156,4 +140,3 @@
   <div class="toast" data-toast role="status" aria-live="polite"></div>
 </div>
 {% endblock %}
-

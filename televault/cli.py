@@ -23,6 +23,13 @@ from .telegram_client import TelegramMediaClient
 
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
+THUMBNAIL_LAYOUT_MARKER = ".thumbnail-layout-v2"
+
+
+def _mark_thumbnail_layout_current(data_dir: Path) -> None:
+    marker = data_dir / THUMBNAIL_LAYOUT_MARKER
+    marker.write_text("2\n", encoding="utf-8")
+    os.chmod(marker, 0o600)
 
 
 def _prompt(label: str, default: str = "") -> str:
@@ -221,6 +228,7 @@ async def interactive_setup(data_dir: Path) -> int:
         f"{result.duplicates} duplicate message(s) skipped, "
         f"{result.thumbnails} thumbnail(s) created."
     )
+    _mark_thumbnail_layout_current(data_dir)
 
     print()
     port = _prompt_port()
@@ -255,7 +263,12 @@ async def interactive_setup(data_dir: Path) -> int:
     return port
 
 
-async def scan_existing(data_dir: Path, full: bool) -> None:
+async def scan_existing(
+    data_dir: Path,
+    full: bool,
+    *,
+    rebuild_thumbnails: bool = False,
+) -> None:
     config = SecretVault(data_dir).load()
     database = Database(data_dir / "televault.db")
     database.initialise()
@@ -272,9 +285,16 @@ async def scan_existing(data_dir: Path, full: bool) -> None:
         )
 
     try:
-        await indexer.scan(full=full, progress=report)
+        result = await indexer.scan(
+            full=full,
+            rebuild_thumbnails=rebuild_thumbnails,
+            progress=report,
+        )
     finally:
         await telegram.disconnect()
+    if rebuild_thumbnails:
+        _mark_thumbnail_layout_current(data_dir)
+        print(f"Thumbnail upgrade complete: {result.thumbnails} preview(s) refreshed.")
 
 
 async def doctor(data_dir: Path) -> None:
@@ -310,6 +330,10 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands.add_parser("setup", help="Run the interactive Telegram and website setup")
     scan_parser = subcommands.add_parser("scan", help="Index new Telegram media")
     scan_parser.add_argument("--full", action="store_true", help="Read the complete chat history")
+    subcommands.add_parser(
+        "upgrade-thumbnails",
+        help="Refresh stored previews using the current orientation-preserving layout",
+    )
     subcommands.add_parser("doctor", help="Check configuration, database, and Telegram access")
     return parser
 
@@ -322,6 +346,8 @@ def main() -> None:
             asyncio.run(interactive_setup(data_dir))
         elif args.command == "scan":
             asyncio.run(scan_existing(data_dir, bool(args.full)))
+        elif args.command == "upgrade-thumbnails":
+            asyncio.run(scan_existing(data_dir, True, rebuild_thumbnails=True))
         elif args.command == "doctor":
             asyncio.run(doctor(data_dir))
     except KeyboardInterrupt:
@@ -334,4 +360,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

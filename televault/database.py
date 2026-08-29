@@ -153,6 +153,7 @@ class Database:
         page: int = 1,
         per_page: int = 36,
         sort: str = "newest",
+        offset: int | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         clauses: list[str] = []
         parameters: list[Any] = []
@@ -169,7 +170,9 @@ class Database:
             "name": "title COLLATE NOCASE ASC, id DESC",
             "largest": "size_bytes DESC, id DESC",
         }.get(sort, "message_date DESC, id DESC")
-        offset = max(0, page - 1) * per_page
+        resolved_offset = (
+            max(0, int(offset)) if offset is not None else max(0, page - 1) * per_page
+        )
         with self.connect() as connection:
             total = int(
                 connection.execute(
@@ -178,7 +181,7 @@ class Database:
             )
             rows = connection.execute(
                 f"SELECT * FROM media {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
-                (*parameters, per_page, offset),
+                (*parameters, per_page, resolved_offset),
             ).fetchall()
         return [dict(row) for row in rows], total
 
@@ -228,4 +231,3 @@ class Database:
                 "SELECT value FROM app_meta WHERE key = ?", (key,)
             ).fetchone()
         return str(row[0]) if row else default
-
