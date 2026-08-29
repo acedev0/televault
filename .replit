@@ -1,0 +1,8 @@
+run = "bash scripts/replit-run.sh"
+entrypoint = "televault/__main__.py"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "bash scripts/replit-run.sh"]

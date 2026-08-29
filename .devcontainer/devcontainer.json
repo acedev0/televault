@@ -1,0 +1,20 @@
+{
+  "name": "TeleVault",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "postCreateCommand": "python -m venv .venv && .venv/bin/python -m pip install --upgrade pip wheel && .venv/bin/python -m pip install -r requirements-dev.txt",
+  "forwardPorts": [8181],
+  "portsAttributes": {
+    "8181": {
+      "label": "TeleVault",
+      "onAutoForward": "notify",
+      "visibility": "private"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python"
+      ]
+    }
+  }
+}

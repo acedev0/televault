@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible TeleVault problem without sharing private data
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never include Telegram credentials, phone numbers, OTPs, sessions, master keys, passwords, private URLs, chat names, filenames, captions, or thumbnails.
+  - type: input
+    id: version
+    attributes:
+      label: TeleVault version or commit
+      placeholder: v1.2.0 or commit hash
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Linux VPS installer
+        - Docker Compose
+        - Replit
+        - GitHub Codespaces
+        - Manual installation
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, and browser
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the expected result and the actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open...
+        2. Select...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      description: Remove every credential and private identifier before pasting a short relevant excerpt.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I ran `televaultctl doctor` or the equivalent local check.
+          required: true
+        - label: I removed all credentials and private media information.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

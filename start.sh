@@ -13,7 +13,8 @@ fi
 if [[ ! -f "$DATA_DIR/secrets.enc" ]]; then
   "$VENV_DIR/bin/python" -m televault --data-dir "$DATA_DIR" setup
 fi
-PORT="$(awk -F= '$1 == "TELEVAULT_PORT" { print $2 }' "$DATA_DIR/runtime.env" | tail -n 1 | tr -d '[:space:]')"
+SAVED_PORT="$(awk -F= '$1 == "TELEVAULT_PORT" { print $2 }' "$DATA_DIR/runtime.env" | tail -n 1 | tr -d '[:space:]')"
+BIND_PORT="${PORT:-${TELEVAULT_PORT:-${SAVED_PORT:-8181}}}"
+[[ "$BIND_PORT" =~ ^[0-9]+$ ]] || { printf 'Invalid web port: %s\n' "$BIND_PORT" >&2; exit 1; }
 export TELEVAULT_DATA_DIR="$DATA_DIR"
-exec "$VENV_DIR/bin/uvicorn" televault.app:create_app --factory --host 0.0.0.0 --port "${PORT:-8181}" --workers 1 --no-proxy-headers
-
+exec "$VENV_DIR/bin/uvicorn" televault.app:create_app --factory --host 0.0.0.0 --port "$BIND_PORT" --workers 1 --no-proxy-headers

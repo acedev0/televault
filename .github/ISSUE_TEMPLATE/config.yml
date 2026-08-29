@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Support guide
+    url: https://github.com/acedev0/televault/blob/main/SUPPORT.md
+    about: Check troubleshooting and the information needed for support.
+  - name: Private security report
+    url: https://github.com/acedev0/televault/security/advisories/new
+    about: Report vulnerabilities privately; never post credentials in an issue.

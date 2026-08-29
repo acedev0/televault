@@ -12,19 +12,20 @@ trap cleanup EXIT
 
 mkdir -p "$PACKAGE_DIR/scripts" "$OUTPUT_DIR"
 files=(
-  televault pytests .github
+  televault pytests assets docs .github .devcontainer
   install.sh start.sh requirements.txt requirements-dev.txt pyproject.toml
-  Dockerfile docker-compose.yml .dockerignore .gitignore
-  README.md SECURITY.md LICENSE
+  Dockerfile docker-compose.yml .dockerignore .gitignore .replit replit.nix
+  README.md SECURITY.md CONTRIBUTING.md SUPPORT.md CODE_OF_CONDUCT.md LICENSE
 )
 for item in "${files[@]}"; do
   cp -a "$PROJECT_DIR/$item" "$PACKAGE_DIR/"
 done
 cp -a "$PROJECT_DIR/scripts/televaultctl" "$PACKAGE_DIR/scripts/"
 cp -a "$PROJECT_DIR/scripts/package_release.sh" "$PACKAGE_DIR/scripts/"
+cp -a "$PROJECT_DIR/scripts/replit-run.sh" "$PACKAGE_DIR/scripts/"
 find "$PACKAGE_DIR" -type d -name __pycache__ -prune -exec rm -rf -- {} +
 find "$PACKAGE_DIR" -type f -name '*.pyc' -delete
-chmod +x "$PACKAGE_DIR/install.sh" "$PACKAGE_DIR/start.sh" "$PACKAGE_DIR/scripts/televaultctl" "$PACKAGE_DIR/scripts/package_release.sh"
+chmod +x "$PACKAGE_DIR/install.sh" "$PACKAGE_DIR/start.sh" "$PACKAGE_DIR/scripts/televaultctl" "$PACKAGE_DIR/scripts/package_release.sh" "$PACKAGE_DIR/scripts/replit-run.sh"
 
 rm -f -- "$OUTPUT_DIR/TeleVault-$VERSION.zip" "$OUTPUT_DIR/TeleVault-$VERSION.zip.sha256"
 (cd "$STAGE_DIR" && zip -q -r "$OUTPUT_DIR/TeleVault-$VERSION.zip" "TeleVault-$VERSION")
