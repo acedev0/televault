@@ -20,6 +20,7 @@
       <input name="q" type="search" value="{{ query }}" placeholder="Search your library" aria-label="Search your library">
       <input type="hidden" name="kind" value="{{ kind }}">
       <input type="hidden" name="sort" value="{{ sort }}">
+      {% if sort == 'random' %}<input type="hidden" name="seed" value="{{ seed }}">{% endif %}
       <kbd>/</kbd>
     </form>
     <div class="topbar-actions">
@@ -39,15 +40,15 @@
   <aside class="sidebar" data-sidebar>
     <nav aria-label="Media library">
       <p class="nav-label">Library</p>
-      <a class="nav-item {% if kind == 'all' %}active{% endif %}" href="/?kind=all&amp;sort={{ sort }}">
+      <a class="nav-item {% if kind == 'all' %}active{% endif %}" href="/?kind=all&amp;sort={{ sort }}{% if sort == 'random' %}&amp;seed={{ seed }}{% endif %}">
         <svg viewBox="0 0 24 24"><path d="M4.5 5.5h6v6h-6zM13.5 5.5h6v6h-6zM4.5 14.5h6v4h-6zM13.5 14.5h6v4h-6z"/></svg>
         <span>All media</span><em>{{ stats.total }}</em>
       </a>
-      <a class="nav-item {% if kind == 'video' %}active{% endif %}" href="/?kind=video&amp;sort={{ sort }}">
+      <a class="nav-item {% if kind == 'video' %}active{% endif %}" href="/?kind=video&amp;sort={{ sort }}{% if sort == 'random' %}&amp;seed={{ seed }}{% endif %}">
         <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="3"/><path d="m10 9 5 3-5 3V9Z"/></svg>
         <span>Videos</span><em>{{ stats.videos }}</em>
       </a>
-      <a class="nav-item {% if kind == 'photo' %}active{% endif %}" href="/?kind=photo&amp;sort={{ sort }}">
+      <a class="nav-item {% if kind == 'photo' %}active{% endif %}" href="/?kind=photo&amp;sort={{ sort }}{% if sort == 'random' %}&amp;seed={{ seed }}{% endif %}">
         <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="m6.5 17 4.5-4 2.5 2 2-2 2.5 4"/></svg>
         <span>Photos</span><em>{{ stats.photos }}</em>
       </a>
@@ -98,21 +99,33 @@
 
     <section class="filter-row" aria-label="Media filters">
       <div class="filter-chips">
-        <a class="chip {% if kind == 'all' %}active{% endif %}" href="/?q={{ query|urlencode }}&amp;kind=all&amp;sort={{ sort }}">All</a>
-        <a class="chip {% if kind == 'video' %}active{% endif %}" href="/?q={{ query|urlencode }}&amp;kind=video&amp;sort={{ sort }}">Videos</a>
-        <a class="chip {% if kind == 'photo' %}active{% endif %}" href="/?q={{ query|urlencode }}&amp;kind=photo&amp;sort={{ sort }}">Photos</a>
+        <a class="chip {% if kind == 'all' %}active{% endif %}" href="/?q={{ query|urlencode }}&amp;kind=all&amp;sort={{ sort }}{% if sort == 'random' %}&amp;seed={{ seed }}{% endif %}">All</a>
+        <a class="chip {% if kind == 'video' %}active{% endif %}" href="/?q={{ query|urlencode }}&amp;kind=video&amp;sort={{ sort }}{% if sort == 'random' %}&amp;seed={{ seed }}{% endif %}">Videos</a>
+        <a class="chip {% if kind == 'photo' %}active{% endif %}" href="/?q={{ query|urlencode }}&amp;kind=photo&amp;sort={{ sort }}{% if sort == 'random' %}&amp;seed={{ seed }}{% endif %}">Photos</a>
       </div>
-      <form class="sort-form" action="/" method="get">
-        <input type="hidden" name="q" value="{{ query }}">
-        <input type="hidden" name="kind" value="{{ kind }}">
-        <label for="sort">Sort</label>
-        <select id="sort" name="sort" data-auto-submit>
-          <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest</option>
-          <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest</option>
-          <option value="name" {% if sort == 'name' %}selected{% endif %}>Name</option>
-          <option value="largest" {% if sort == 'largest' %}selected{% endif %}>Largest</option>
-        </select>
-      </form>
+      <div class="library-controls">
+        <button class="view-switch{% if sort == 'random' %} active{% endif %}" type="button" role="switch" aria-checked="{% if sort == 'random' %}true{% else %}false{% endif %}" data-random-toggle title="Shuffle the complete filtered library">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 17l4.8-4.8M21 16v5h-5M15.5 8.5 21 3M4 6h2.5c2.2 0 3.4 1 4.6 3l1.8 3c1.2 2 2.4 3 4.6 3H21"/></svg>
+          <span>Random</span><i aria-hidden="true"></i>
+        </button>
+        <button class="view-switch" type="button" role="switch" aria-checked="true" data-infinite-toggle title="Load more items as you scroll">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v14M7 13l5 5 5-5"/><path d="M5 21h14"/></svg>
+          <span>Infinite scroll</span><i aria-hidden="true"></i>
+        </button>
+        <form class="sort-form" action="/" method="get">
+          <input type="hidden" name="q" value="{{ query }}">
+          <input type="hidden" name="kind" value="{{ kind }}">
+          {% if sort == 'random' %}<input type="hidden" name="seed" value="{{ seed }}">{% endif %}
+          <label for="sort">Sort</label>
+          <select id="sort" name="sort" data-auto-submit>
+            <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest</option>
+            <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Oldest</option>
+            <option value="name" {% if sort == 'name' %}selected{% endif %}>Name</option>
+            <option value="largest" {% if sort == 'largest' %}selected{% endif %}>Largest</option>
+            <option value="random" {% if sort == 'random' %}selected{% endif %}>Random</option>
+          </select>
+        </form>
+      </div>
     </section>
 
     {% if items %}
@@ -121,10 +134,10 @@
     </section>
 
     {% if has_more %}
-    <div class="infinite-loader" data-infinite-loader data-offset="{{ items|length }}" data-total="{{ total }}" role="status" aria-live="polite">
+    <div class="infinite-loader" data-infinite-loader data-offset="{{ items|length }}" data-total="{{ total }}" data-seed="{{ seed }}" role="status" aria-live="polite">
       <span class="loader-spinner" aria-hidden="true"></span>
       <p data-loader-message>Loading more media…</p>
-      <button type="button" data-loader-retry>Retry</button>
+      <button type="button" data-loader-retry>Load more</button>
     </div>
     {% endif %}
     {% else %}

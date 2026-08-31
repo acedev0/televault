@@ -1,3 +1,3 @@
 """TeleVault - stream private Telegram media without storing source files."""
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"

@@ -35,6 +35,24 @@ installer adds the port automatically.
 sudo televaultctl update
 ```
 
+The update keeps `/var/lib/televault` unchanged, including the encrypted Telegram session, selected
+chat, port, media index, and website credentials. It checks the Git revision before restarting and
+restores the previous app revision if installation fails.
+
+Enable or disable automatic daily update checks:
+
+```bash
+sudo televaultctl auto-update enable
+sudo televaultctl auto-update status
+sudo televaultctl auto-update disable
+```
+
+Permanently uninstall the service and all TeleVault data:
+
+```bash
+sudo televaultctl uninstall --yes
+```
+
 ### Private SSH tunnel
 
 ```bash
@@ -149,4 +167,3 @@ after restoration and never upload the backup publicly.
 
 Serverless and static hosts cannot keep the persistent MTProto connection or state required for
 range streaming. Do not deploy TeleVault to Vercel functions, GitHub Pages, or static hosting.
-

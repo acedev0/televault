@@ -159,6 +159,9 @@ def test_library_uses_infinite_scroll_without_numbered_pages(tmp_path):
         assert first_batch.status_code == 200
         assert first_batch.text.count('data-media-id="') == 36
         assert "data-infinite-loader" in first_batch.text
+        assert "data-infinite-toggle" in first_batch.text
+        assert "data-random-toggle" in first_batch.text
+        assert "Infinite scroll" in first_batch.text
         assert "media-card portrait" in first_batch.text
         assert 'aria-label="Pagination"' not in first_batch.text
 
@@ -167,6 +170,82 @@ def test_library_uses_infinite_scroll_without_numbered_pages(tmp_path):
         assert second_batch.text.count('data-media-id="') == 9
         assert second_batch.headers["x-next-offset"] == "45"
         assert second_batch.headers["x-has-more"] == "false"
+
+
+def test_random_library_redirects_to_a_seeded_stable_feed(tmp_path):
+    make_config(tmp_path)
+    database = Database(tmp_path / "televault.db")
+    for message_id in range(12, 90):
+        database.upsert_media(
+            MediaRecord(
+                chat_id=-100123,
+                message_id=message_id,
+                dedupe_key=f"video:{message_id}",
+                kind="video",
+                title=f"Random item {message_id}",
+                filename=f"random-{message_id}.mp4",
+                caption="",
+                mime_type="video/mp4",
+                size_bytes=message_id * 100,
+                duration_seconds=30,
+                width=1920,
+                height=1080,
+                message_date=f"2026-08-29T14:{message_id % 60:02d}:00+00:00",
+            )
+        )
+    app = create_app(tmp_path, telegram_factory=FakeTelegram)
+    with TestClient(app) as client:
+        login(client)
+        redirect = client.get("/?kind=video&sort=random", follow_redirects=False)
+        assert redirect.status_code == 303
+        assert "sort=random" in redirect.headers["location"]
+        assert "seed=" in redirect.headers["location"]
+
+        first = client.get("/api/media?kind=video&sort=random&seed=991&offset=0")
+        second = client.get("/api/media?kind=video&sort=random&seed=991&offset=36")
+        first_ids = set(re.findall(r'data-media-id="(\d+)"', first.text))
+        second_ids = set(re.findall(r'data-media-id="(\d+)"', second.text))
+        assert len(first_ids) == 36
+        assert len(second_ids) == 36
+        assert first_ids.isdisjoint(second_ids)
+
+
+def test_watch_page_has_custom_player_and_ordered_next_video(tmp_path):
+    make_config(tmp_path)
+    database = Database(tmp_path / "televault.db")
+    database.upsert_media(
+        MediaRecord(
+            chat_id=-100123,
+            message_id=12,
+            dedupe_key="video:12",
+            kind="video",
+            title="Next video",
+            filename="next.mp4",
+            caption="",
+            mime_type="video/mp4",
+            size_bytes=len(VIDEO),
+            duration_seconds=20,
+            width=1920,
+            height=1080,
+            message_date="2026-08-29T12:02:00+00:00",
+        )
+    )
+    app = create_app(tmp_path, telegram_factory=FakeTelegram)
+    with TestClient(app) as client:
+        login(client)
+        response = client.get("/media/1?kind=all&sort=oldest")
+        assert response.status_code == 200
+        assert 'data-player' in response.text
+        assert '/static/js/player.js' in response.text
+        assert 'data-player-speed="2"' in response.text
+        assert 'data-player-fullscreen' in response.text
+        assert 'data-next-url="/media/3?kind=all&amp;sort=oldest"' in response.text
+        assert "Keyboard shortcuts" in response.text
+
+        player_script = client.get("/static/js/player.js")
+        assert player_script.status_code == 200
+        for shortcut in ('key === "arrowleft"', 'key === "arrowright"', 'key === "n"', 'key === "f"'):
+            assert shortcut in player_script.text
 
 
 def test_infinite_scroll_endpoint_requires_login(tmp_path):

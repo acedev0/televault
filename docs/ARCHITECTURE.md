@@ -23,11 +23,11 @@ flowchart TD
 | `televault/app.py` | Authentication, HTML routes, sync API, thumbnails, photo delivery, and range streaming |
 | `televault/telegram_client.py` | Persistent Telethon connection, chunk downloads, photos, and preview generation |
 | `televault/indexer.py` | Full/incremental chat scans, metadata extraction, duplicate filtering, and thumbnails |
-| `televault/database.py` | SQLite schema, search, sort, pagination batches, related media, and statistics |
+| `televault/database.py` | SQLite schema, search, deterministic seeded shuffle, ordered watch playlists, and statistics |
 | `televault/config.py` | Encrypted configuration/session storage and restrictive filesystem permissions |
 | `televault/security.py` | Argon2id password hashing and login rate limiting |
 | `televault/templates/` | Password page, infinite-scroll library, and media watch page |
-| `televault/static/` | Responsive UI styling and browser-side sync/infinite-scroll behaviour |
+| `televault/static/` | Responsive UI, custom video player, keyboard/Media Session controls, sync, and infinite loading |
 
 ## Indexing
 
@@ -39,13 +39,20 @@ flowchart TD
 6. Incremental scans remember the highest processed Telegram message ID.
 
 The browser receives 36 cards initially. An authenticated HTML endpoint supplies additional
-batches as an intersection observer approaches the bottom of the same page.
+batches as an intersection observer approaches the bottom of the same page. Turning infinite
+scroll off keeps the same endpoint behind a manual “Load more” control; numbered pages are never
+introduced. Random mode hashes each media id with a session seed, creating one stable permutation
+across every batch so the feed does not repeat or reorder while scrolling.
 
 ## Video streaming
 
 The browser sends a standard `Range` request. TeleVault validates the range and passes its byte
 offset to Telethon's downloader. It returns `206 Partial Content`, `Content-Range`, exact
 `Content-Length`, and `Accept-Ranges: bytes` without creating a complete local video file.
+
+The browser player uses the native media element behind same-origin custom controls. Playback
+speed, seek, volume, fullscreen, picture-in-picture, theatre mode, next/previous navigation,
+autoplay-next, keyboard shortcuts, and Media Session handlers do not send media to a third party.
 
 Only a small number of streams may run concurrently. Telegram flood waits and network limits still
 apply. TeleVault does not transcode unsupported browser codecs.
@@ -81,4 +88,3 @@ disclosure, not for surviving root compromise. Treat the complete directory as s
 
 Plain HTTP does not protect traffic between the browser and server. Add a private tunnel or VPN at
 the network boundary when remote traffic crosses an untrusted network.
-

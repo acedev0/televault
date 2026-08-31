@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-APP_NAME="TeleVault"
 SERVICE_NAME="televault"
 SERVICE_USER="televault"
 INSTALL_ROOT="${TELEVAULT_INSTALL_ROOT:-/opt/televault}"
@@ -189,4 +188,6 @@ printf '%s\n' "Commands:"
 printf '%s\n' "  televaultctl status"
 printf '%s\n' "  televaultctl logs"
 printf '%s\n' "  televaultctl sync"
-printf '%s\n' "  televaultctl update"
+printf '%s\n' "  sudo televaultctl update"
+printf '%s\n' "  sudo televaultctl auto-update enable"
+printf '%s\n' "  sudo televaultctl uninstall --yes"

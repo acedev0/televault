@@ -1,7 +1,6 @@
 import os
 from dataclasses import replace
 from datetime import datetime, timezone
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -97,6 +96,34 @@ def test_database_search_filter_and_offset_loading(tmp_path):
     rows, total = database.list_media(per_page=1, offset=1, sort="newest")
     assert total == 2
     assert len(rows) == 1
+
+
+def test_random_sort_is_stable_complete_and_has_no_batch_duplicates(tmp_path):
+    database = Database(tmp_path / "media.db")
+    database.initialise()
+    for message_id in range(1, 91):
+        database.upsert_media(
+            replace(
+                sample_record(),
+                message_id=message_id,
+                dedupe_key=f"video:{message_id}",
+                title=f"Video {message_id:03d}",
+            )
+        )
+
+    first, total = database.list_media(sort="random", seed=123456, per_page=36, offset=0)
+    second, _ = database.list_media(sort="random", seed=123456, per_page=36, offset=36)
+    third, _ = database.list_media(sort="random", seed=123456, per_page=36, offset=72)
+    repeated, _ = database.list_media(sort="random", seed=123456, per_page=36, offset=0)
+    different_seed, _ = database.list_media(sort="random", seed=654321, per_page=36, offset=0)
+
+    ids = [row["id"] for row in first + second + third]
+    assert total == 90
+    assert len(ids) == 90
+    assert len(set(ids)) == 90
+    assert [row["id"] for row in repeated] == [row["id"] for row in first]
+    assert [row["id"] for row in different_seed] != [row["id"] for row in first]
+    assert [row["id"] for row in database.playlist(sort="random", seed=123456)] == ids
 
 
 @pytest.mark.asyncio

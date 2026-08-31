@@ -2,16 +2,37 @@
 set -Eeuo pipefail
 
 SERVICE="televault.service"
-APP_DIR="${TELEVAULT_INSTALL_ROOT:-/opt/televault}/app"
-VENV="${TELEVAULT_INSTALL_ROOT:-/opt/televault}/.venv"
+UPDATE_SERVICE="televault-update.service"
+UPDATE_TIMER="televault-update.timer"
+INSTALL_ROOT="${TELEVAULT_INSTALL_ROOT:-/opt/televault}"
+APP_DIR="$INSTALL_ROOT/app"
+VENV="$INSTALL_ROOT/.venv"
 DATA_DIR="${TELEVAULT_DATA_DIR:-/var/lib/televault}"
 SERVICE_USER="televault"
 UPDATE_URL="${TELEVAULT_UPDATE_URL:-https://raw.githubusercontent.com/acedev0/televault/main/install.sh}"
+BRANCH="${TELEVAULT_BRANCH:-main}"
 
 need_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
     printf 'Run this command with sudo.\n' >&2
     exit 1
+  fi
+}
+
+is_safe_tree() {
+  local target="${1:-}"
+  [[ "$target" == /* ]] || return 1
+  [[ "${#target}" -ge 12 ]] || return 1
+  case "$target" in
+    /|/opt|/var|/var/lib|/usr|/usr/local) return 1 ;;
+  esac
+}
+
+current_version() {
+  if [[ -x "$VENV/bin/python" && -d "$APP_DIR/televault" ]]; then
+    (cd "$APP_DIR" && "$VENV/bin/python" -m televault --version) 2>/dev/null || printf 'TeleVault (unknown version)\n'
+  else
+    printf 'TeleVault is not installed\n'
   fi
 }
 
@@ -21,17 +42,192 @@ TeleVault management
 
 Usage: televaultctl <command>
 
-  status       Show service status
-  logs         Follow service logs
-  restart      Restart TeleVault
-  start        Start TeleVault
-  stop         Stop TeleVault
-  sync         Scan Telegram for new media now
-  full-sync    Re-read the complete chat history
-  doctor       Test configuration, database, and Telegram access
-  configure    Repeat the interactive setup
-  update       Install the latest release from GitHub
+  status                    Show service status
+  logs                      Follow service logs
+  restart                   Restart TeleVault
+  start                     Start TeleVault
+  stop                      Stop TeleVault
+  sync                      Scan Telegram for new media now
+  full-sync                 Re-read the complete chat history
+  doctor                    Test configuration, database, and Telegram access
+  configure                 Repeat the interactive setup
+  version                   Show the installed TeleVault version
+  update                    Safely install the latest version from GitHub
+  auto-update enable        Check for and install updates automatically
+  auto-update disable       Disable automatic updates
+  auto-update status        Show the automatic-update timer
+  uninstall [--yes]         Remove TeleVault and all of its private data
 HELP
+}
+
+rollback_update() {
+  local previous_revision="$1"
+  local rollback_dir="$2"
+  printf 'Update failed; restoring the previous TeleVault version.\n' >&2
+  systemctl stop "$SERVICE" >/dev/null 2>&1 || true
+  if [[ -n "$previous_revision" && -d "$APP_DIR/.git" ]]; then
+    git -C "$APP_DIR" reset --hard "$previous_revision" >/dev/null 2>&1 || true
+  fi
+  if [[ -f "$rollback_dir/televaultctl" ]]; then
+    install -m 0755 "$rollback_dir/televaultctl" /usr/local/bin/televaultctl
+  elif [[ -f "$APP_DIR/scripts/televaultctl" ]]; then
+    install -m 0755 "$APP_DIR/scripts/televaultctl" /usr/local/bin/televaultctl
+  fi
+  if [[ -f "$rollback_dir/televault.service" ]]; then
+    install -m 0644 "$rollback_dir/televault.service" "/etc/systemd/system/$SERVICE"
+  fi
+  if [[ -x "$VENV/bin/python" && -f "$APP_DIR/requirements.txt" ]]; then
+    "$VENV/bin/python" -m pip install --disable-pip-version-check -q -r "$APP_DIR/requirements.txt" || true
+  fi
+  systemctl daemon-reload
+  systemctl start "$SERVICE" >/dev/null 2>&1 || true
+}
+
+update_app() {
+  need_root
+  [[ -d "$APP_DIR/.git" ]] || {
+    printf 'TeleVault Git checkout not found at %s. Run the installer again.\n' "$APP_DIR" >&2
+    exit 1
+  }
+
+  local current_revision latest_revision previous_revision installer rollback_dir update_status
+  current_revision="$(git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || true)"
+  if git -C "$APP_DIR" fetch --quiet origin "$BRANCH"; then
+    latest_revision="$(git -C "$APP_DIR" rev-parse FETCH_HEAD 2>/dev/null || true)"
+    if [[ -n "$current_revision" && "$current_revision" == "$latest_revision" ]]; then
+      [[ "${2:-}" == "--quiet" ]] || printf 'TeleVault is already up to date (%s).\n' "$(current_version)"
+      return 0
+    fi
+  else
+    printf 'Could not check GitHub for updates. The current installation was not changed.\n' >&2
+    exit 1
+  fi
+
+  previous_revision="$current_revision"
+  rollback_dir="$(mktemp -d "$INSTALL_ROOT/.update-rollback.XXXXXX")"
+  chmod 0700 "$rollback_dir"
+  [[ -f /usr/local/bin/televaultctl ]] && cp -a /usr/local/bin/televaultctl "$rollback_dir/televaultctl"
+  [[ -f "/etc/systemd/system/$SERVICE" ]] && cp -a "/etc/systemd/system/$SERVICE" "$rollback_dir/televault.service"
+  installer="$(mktemp)"
+  chmod 0600 "$installer"
+
+  if ! curl -fLsS --proto '=https' --tlsv1.2 "$UPDATE_URL" -o "$installer"; then
+    printf 'Could not download the signed-in repository installer. Nothing was changed.\n' >&2
+    rm -f -- "$installer"
+    case "$rollback_dir" in "$INSTALL_ROOT"/.update-rollback.*) rm -rf -- "$rollback_dir" ;; esac
+    exit 1
+  fi
+
+  printf 'Updating TeleVault; encrypted credentials and media data will be preserved.\n'
+  if bash "$installer"; then
+    update_status=0
+  else
+    update_status=$?
+  fi
+  rm -f -- "$installer"
+
+  if (( update_status != 0 )); then
+    rollback_update "$previous_revision" "$rollback_dir"
+    case "$rollback_dir" in "$INSTALL_ROOT"/.update-rollback.*) rm -rf -- "$rollback_dir" ;; esac
+    exit "$update_status"
+  fi
+
+  case "$rollback_dir" in "$INSTALL_ROOT"/.update-rollback.*) rm -rf -- "$rollback_dir" ;; esac
+  printf 'Update complete. %s\n' "$(current_version)"
+}
+
+auto_update() {
+  need_root
+  case "${2:-status}" in
+    enable)
+      cat >"/etc/systemd/system/$UPDATE_SERVICE" <<'UNIT'
+[Unit]
+Description=Install the latest TeleVault update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/televaultctl update --quiet
+UNIT
+      cat >"/etc/systemd/system/$UPDATE_TIMER" <<'UNIT'
+[Unit]
+Description=Daily TeleVault update check
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+      systemctl daemon-reload
+      systemctl enable --now "$UPDATE_TIMER"
+      printf 'Automatic updates enabled. TeleVault will check GitHub daily.\n'
+      systemctl list-timers "$UPDATE_TIMER" --no-pager
+      ;;
+    disable)
+      systemctl disable --now "$UPDATE_TIMER" >/dev/null 2>&1 || true
+      rm -f -- "/etc/systemd/system/$UPDATE_TIMER" "/etc/systemd/system/$UPDATE_SERVICE"
+      systemctl daemon-reload
+      systemctl reset-failed "$UPDATE_SERVICE" >/dev/null 2>&1 || true
+      printf 'Automatic updates disabled.\n'
+      ;;
+    status)
+      if systemctl is-enabled --quiet "$UPDATE_TIMER" 2>/dev/null; then
+        systemctl list-timers "$UPDATE_TIMER" --no-pager
+      else
+        printf 'Automatic updates are disabled.\n'
+      fi
+      ;;
+    *)
+      printf 'Usage: televaultctl auto-update <enable|disable|status>\n' >&2
+      exit 1
+      ;;
+  esac
+}
+
+uninstall_app() {
+  need_root
+  if [[ "${2:-}" != "--yes" ]]; then
+    [[ -t 0 ]] || {
+      printf 'Use: sudo televaultctl uninstall --yes\n' >&2
+      exit 1
+    }
+    printf 'This permanently deletes TeleVault, its encrypted Telegram session, metadata, and thumbnails.\n'
+    read -r -p 'Type REMOVE to continue: ' confirmation
+    [[ "$confirmation" == "REMOVE" ]] || {
+      printf 'Uninstall cancelled.\n'
+      exit 1
+    }
+  fi
+
+  is_safe_tree "$INSTALL_ROOT" || {
+    printf 'Refusing unsafe install path: %s\n' "$INSTALL_ROOT" >&2
+    exit 1
+  }
+  is_safe_tree "$DATA_DIR" || {
+    printf 'Refusing unsafe data path: %s\n' "$DATA_DIR" >&2
+    exit 1
+  }
+
+  local port=""
+  if [[ -f "$DATA_DIR/runtime.env" ]]; then
+    port="$(awk -F= '$1 == "TELEVAULT_PORT" { print $2 }' "$DATA_DIR/runtime.env" | tail -n 1 | tr -d '[:space:]')"
+  fi
+  systemctl disable --now "$UPDATE_TIMER" >/dev/null 2>&1 || true
+  systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
+  rm -f -- "/etc/systemd/system/$SERVICE" "/etc/systemd/system/$UPDATE_TIMER" "/etc/systemd/system/$UPDATE_SERVICE"
+  if command -v ufw >/dev/null 2>&1 && [[ "$port" =~ ^[0-9]+$ ]]; then
+    ufw --force delete allow "$port/tcp" >/dev/null 2>&1 || true
+  fi
+  rm -rf -- "$INSTALL_ROOT" "$DATA_DIR"
+  id "$SERVICE_USER" >/dev/null 2>&1 && userdel "$SERVICE_USER" >/dev/null 2>&1 || true
+  rm -f -- /usr/local/bin/televaultctl
+  systemctl daemon-reload
+  systemctl reset-failed >/dev/null 2>&1 || true
+  printf 'TeleVault and all TeleVault data were permanently removed.\n'
 }
 
 case "${1:-}" in
@@ -58,9 +254,9 @@ case "${1:-}" in
     need_root
     TELEVAULT_RECONFIGURE=1 bash "$APP_DIR/install.sh"
     ;;
-  update)
-    need_root
-    curl -fsSL "$UPDATE_URL" | bash
-    ;;
+  version) current_version ;;
+  update) update_app "$@" ;;
+  auto-update) auto_update "$@" ;;
+  uninstall) uninstall_app "$@" ;;
   *) usage; [[ -n "${1:-}" ]] && exit 1 || exit 0 ;;
 esac

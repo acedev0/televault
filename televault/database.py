@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -154,6 +155,7 @@ class Database:
         per_page: int = 36,
         sort: str = "newest",
         offset: int | None = None,
+        seed: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
         clauses: list[str] = []
         parameters: list[Any] = []
@@ -179,11 +181,54 @@ class Database:
                     f"SELECT COUNT(*) FROM media {where}", parameters
                 ).fetchone()[0]
             )
-            rows = connection.execute(
-                f"SELECT * FROM media {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
-                (*parameters, per_page, resolved_offset),
-            ).fetchall()
+            if sort == "random":
+                # Hashing each stable database id with a session seed produces one
+                # deterministic permutation. Offset batches therefore never repeat
+                # or reshuffle items while the user scrolls.
+                matching_rows = connection.execute(
+                    f"SELECT * FROM media {where} ORDER BY id ASC", parameters
+                ).fetchall()
+                normalised_seed = max(0, min(int(seed), 2_147_483_647))
+
+                def random_key(row: sqlite3.Row) -> bytes:
+                    value = f"{normalised_seed}:{int(row['id'])}".encode("ascii")
+                    return hashlib.blake2b(value, digest_size=16).digest()
+
+                matching_rows = sorted(matching_rows, key=random_key)
+                rows = matching_rows[resolved_offset : resolved_offset + per_page]
+            else:
+                rows = connection.execute(
+                    f"SELECT * FROM media {where} ORDER BY {order_by} LIMIT ? OFFSET ?",
+                    (*parameters, per_page, resolved_offset),
+                ).fetchall()
         return [dict(row) for row in rows], total
+
+    def playlist(
+        self,
+        *,
+        query: str = "",
+        kind: str = "video",
+        sort: str = "newest",
+        seed: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Return a complete, ordered metadata-only playlist for watch navigation."""
+        _, total = self.list_media(
+            query=query,
+            kind=kind,
+            per_page=1,
+            sort=sort,
+            seed=seed,
+        )
+        if total == 0:
+            return []
+        rows, _ = self.list_media(
+            query=query,
+            kind=kind,
+            per_page=total,
+            sort=sort,
+            seed=seed,
+        )
+        return rows
 
     def related(self, media_id: int, kind: str, limit: int = 10) -> list[dict[str, Any]]:
         with self.connect() as connection:

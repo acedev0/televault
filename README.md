@@ -51,7 +51,8 @@ production option. See the complete [deployment guide](docs/DEPLOYMENT.md).
 
 - **No original-media storage:** video and photo originals remain in Telegram.
 - **Real browser seeking:** HTTP byte ranges are translated into offset downloads from Telegram.
-- **One continuous library:** search, filter, sort, and infinite-scroll through thousands of items.
+- **One continuous library:** search, filter, stable-randomize, and scroll through thousands of items without numbered pages.
+- **Complete private player:** seeking, speed, next/previous, autoplay, PiP, theatre/fullscreen modes, Media Session, and YouTube-style keyboard controls.
 - **Portrait-safe previews:** generated WebP thumbnails preserve the complete image orientation.
 - **Duplicate protection:** repeated Telegram media resolves to one indexed library item.
 - **Private by default:** Argon2id login, signed sessions, CSRF checks, rate limiting, and security headers.
@@ -62,10 +63,12 @@ production option. See the complete [deployment guide](docs/DEPLOYMENT.md).
 TeleVault provides a responsive dark media library designed for desktop and mobile:
 
 - YouTube-style cards with full landscape and portrait previews
-- one-page infinite scrolling with no numbered pagination
+- one-page infinite scrolling with no numbered pagination, plus a persistent manual “Load more” toggle
+- deterministic random mode that shuffles the complete filtered library without repeats between batches
 - title, caption, filename, type, size, and date search
 - videos, photos, newest, oldest, name, and size filters
-- protected watch pages, thumbnails, streams, and related media
+- protected watch pages with custom controls, playback speed, autoplay-next, PiP, theatre mode, and fullscreen
+- keyboard control with Space/K, arrow keys, J/L, M, F, N/P, number seeking, and speed shortcuts
 - live Telegram sync progress without exposing API credentials
 
 ## One-command VPS installation
@@ -99,6 +102,12 @@ and website credentials are retained:
 
 ```bash
 curl -fLsS --proto '=https' --tlsv1.2 https://raw.githubusercontent.com/acedev0/televault/main/install.sh | sudo bash
+```
+
+Enable a daily update check once; unchanged installations are not restarted:
+
+```bash
+sudo televaultctl auto-update enable
 ```
 
 ## Replit setup
@@ -170,6 +179,17 @@ televaultctl full-sync    re-read the complete chat
 televaultctl doctor       test configuration and Telegram access
 televaultctl configure    repeat interactive setup
 televaultctl update       install the latest GitHub version
+televaultctl auto-update  enable, disable, or inspect automatic updates
+televaultctl version      show the installed version
+televaultctl uninstall    remove TeleVault (add --yes for immediate removal)
+```
+
+`televaultctl update` checks GitHub first, keeps `/var/lib/televault` unchanged, and rolls the app
+back to its previous Git revision if installation fails. To permanently remove the site, Telegram
+session, index, thumbnails, service, and firewall rule:
+
+```bash
+sudo televaultctl uninstall --yes
 ```
 
 ## Docker Compose

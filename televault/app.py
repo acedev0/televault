@@ -9,7 +9,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
@@ -27,6 +27,9 @@ from .telegram_client import TelegramMediaClient
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
+LIBRARY_SORTS = {"newest", "oldest", "name", "largest", "random"}
+MEDIA_KINDS = {"all", "video", "photo"}
+MAX_RANDOM_SEED = 2_147_483_647
 
 
 def format_bytes(value: int | str | None) -> str:
@@ -54,6 +57,25 @@ def format_date(value: str | None) -> str:
         return parsed.strftime("%b %-d, %Y")
     except (ValueError, TypeError):
         return value
+
+
+def _random_seed(value: str | None) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        seed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return seed if 0 <= seed <= MAX_RANDOM_SEED else None
+
+
+def _context_query(query: str, kind: str, sort: str, seed: int) -> str:
+    values: list[tuple[str, str | int]] = [("kind", kind), ("sort", sort)]
+    if query:
+        values.insert(0, ("q", query))
+    if sort == "random":
+        values.append(("seed", seed))
+    return urlencode(values)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -176,7 +198,7 @@ def create_app(
 
     app = FastAPI(
         title="TeleVault",
-        version="1.2.0",
+        version="1.3.0",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -289,8 +311,15 @@ def create_app(
         query = request.query_params.get("q", "")[:120]
         kind = request.query_params.get("kind", "all")
         sort = request.query_params.get("sort", "newest")
-        kind = kind if kind in {"all", "video", "photo"} else "all"
-        sort = sort if sort in {"newest", "oldest", "name", "largest"} else "newest"
+        kind = kind if kind in MEDIA_KINDS else "all"
+        sort = sort if sort in LIBRARY_SORTS else "newest"
+        seed = _random_seed(request.query_params.get("seed"))
+        if sort == "random" and seed is None:
+            seed = secrets.randbelow(MAX_RANDOM_SEED) + 1
+            return RedirectResponse(
+                f"/?{_context_query(query, kind, sort, seed)}", status_code=303
+            )
+        seed = seed or 0
         batch_size = 36
         items, total = database.list_media(
             query=query,
@@ -298,7 +327,9 @@ def create_app(
             per_page=batch_size,
             sort=sort,
             offset=0,
+            seed=seed,
         )
+        context_query = _context_query(query, kind, sort, seed)
         response = templates.TemplateResponse(
             request,
             "library.html",
@@ -309,6 +340,8 @@ def create_app(
                 "query": query,
                 "kind": kind,
                 "sort": sort,
+                "seed": seed,
+                "context_query": context_query,
                 "has_more": len(items) < total,
                 "csrf": _csrf_token(request),
                 "config": config,
@@ -326,8 +359,9 @@ def create_app(
         query = request.query_params.get("q", "")[:120]
         kind = request.query_params.get("kind", "all")
         sort = request.query_params.get("sort", "newest")
-        kind = kind if kind in {"all", "video", "photo"} else "all"
-        sort = sort if sort in {"newest", "oldest", "name", "largest"} else "newest"
+        kind = kind if kind in MEDIA_KINDS else "all"
+        sort = sort if sort in LIBRARY_SORTS else "newest"
+        seed = _random_seed(request.query_params.get("seed")) or 0
         try:
             offset = max(0, int(request.query_params.get("offset", "0")))
         except ValueError:
@@ -339,12 +373,16 @@ def create_app(
             per_page=batch_size,
             sort=sort,
             offset=offset,
+            seed=seed,
         )
         next_offset = offset + len(items)
         response = templates.TemplateResponse(
             request,
             "media_cards.html",
-            {"items": items},
+            {
+                "items": items,
+                "context_query": _context_query(query, kind, sort, seed),
+            },
         )
         response.headers["Cache-Control"] = "private, no-store"
         response.headers["X-Next-Offset"] = str(next_offset)
@@ -367,12 +405,59 @@ def create_app(
                 {"title": "Media not found", "message": "This item is no longer indexed."},
                 status_code=404,
             )
+        query = request.query_params.get("q", "")[:120]
+        library_kind = request.query_params.get("kind", "all")
+        sort = request.query_params.get("sort", "newest")
+        library_kind = library_kind if library_kind in MEDIA_KINDS else "all"
+        sort = sort if sort in LIBRARY_SORTS else "newest"
+        seed = _random_seed(request.query_params.get("seed")) or 0
+        context_query = _context_query(query, library_kind, sort, seed)
+
+        playlist = database.playlist(
+            query=query,
+            kind=str(item["kind"]),
+            sort=sort,
+            seed=seed,
+        )
+        playlist_ids = [int(candidate["id"]) for candidate in playlist]
+        if media_id not in playlist_ids and query:
+            playlist = database.playlist(
+                kind=str(item["kind"]),
+                sort=sort,
+                seed=seed,
+            )
+            playlist_ids = [int(candidate["id"]) for candidate in playlist]
+
+        previous_item = None
+        next_item = None
+        related: list[dict[str, Any]]
+        if media_id in playlist_ids:
+            position = playlist_ids.index(media_id)
+            if position > 0:
+                previous_item = playlist[position - 1]
+            if position + 1 < len(playlist):
+                next_item = playlist[position + 1]
+            related = (playlist[position + 1 :] + playlist[:position])[:10]
+        else:
+            related = database.related(media_id, str(item["kind"]))
+
+        def watch_url(candidate: dict[str, Any] | None) -> str:
+            if not candidate:
+                return ""
+            return f"/media/{int(candidate['id'])}?{context_query}"
+
         response = templates.TemplateResponse(
             request,
             "media.html",
             {
                 "item": item,
-                "related": database.related(media_id, item["kind"]),
+                "related": related,
+                "next_item": next_item,
+                "previous_item": previous_item,
+                "next_url": watch_url(next_item),
+                "previous_url": watch_url(previous_item),
+                "context_query": context_query,
+                "back_url": f"/?{context_query}",
                 "csrf": _csrf_token(request),
                 "config": config,
             },

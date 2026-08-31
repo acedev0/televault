@@ -9,9 +9,9 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/css/app.css">
     <script src="/static/js/app.js" defer></script>
+    {% block scripts %}{% endblock %}
   </head>
   <body class="{% block body_class %}{% endblock %}">
     {% block body %}{% endblock %}
   </body>
 </html>
-

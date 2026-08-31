@@ -15,28 +15,105 @@
     control.addEventListener("change", () => control.form?.submit());
   });
 
+  const randomToggle = document.querySelector("[data-random-toggle]");
+  randomToggle?.addEventListener("click", () => {
+    const url = new URL(window.location.href);
+    const enabled = randomToggle.getAttribute("aria-checked") === "true";
+    if (enabled) {
+      url.searchParams.set("sort", "newest");
+      url.searchParams.delete("seed");
+    } else {
+      const seedBuffer = new Uint32Array(1);
+      window.crypto?.getRandomValues?.(seedBuffer);
+      const seed = (seedBuffer[0] || Date.now()) % 2147483647 || 1;
+      url.searchParams.set("sort", "random");
+      url.searchParams.set("seed", String(seed));
+    }
+    window.location.assign(`${url.pathname}?${url.searchParams.toString()}`);
+  });
+
   const mediaGrid = document.querySelector("[data-media-grid]");
   const infiniteLoader = document.querySelector("[data-infinite-loader]");
+  const infiniteToggle = document.querySelector("[data-infinite-toggle]");
+  const savedInfinitePreference = window.localStorage.getItem("televault.infiniteScroll");
+  let infiniteEnabled = savedInfinitePreference !== "false";
+
+  const updateInfiniteToggle = () => {
+    if (!infiniteToggle) return;
+    infiniteToggle.setAttribute("aria-checked", String(infiniteEnabled));
+    infiniteToggle.classList.toggle("active", infiniteEnabled);
+  };
+  updateInfiniteToggle();
+
   if (mediaGrid && infiniteLoader) {
     const loaderMessage = infiniteLoader.querySelector("[data-loader-message]");
     const retryButton = infiniteLoader.querySelector("[data-loader-retry]");
     let loading = false;
     let hasMore = true;
     let observer;
+    let fallbackScroll;
+
+    const stopWatching = () => {
+      observer?.disconnect();
+      if (fallbackScroll) window.removeEventListener("scroll", fallbackScroll);
+    };
+
+    const startWatching = () => {
+      if (!hasMore || !infiniteEnabled) return;
+      stopWatching();
+      infiniteLoader.classList.remove("manual");
+      if (loaderMessage) loaderMessage.textContent = "Scroll for more media";
+      if ("IntersectionObserver" in window) {
+        if (!observer) {
+          observer = new IntersectionObserver(
+            (entries) => {
+              if (entries.some((entry) => entry.isIntersecting)) loadMore();
+            },
+            { rootMargin: "700px 0px" },
+          );
+        }
+        observer.observe(infiniteLoader);
+      } else {
+        fallbackScroll = () => {
+          if (infiniteLoader.getBoundingClientRect().top < window.innerHeight + 700) loadMore();
+        };
+        window.addEventListener("scroll", fallbackScroll, { passive: true });
+        fallbackScroll();
+      }
+    };
+
+    const applyInfiniteMode = (enabled, persist = true) => {
+      infiniteEnabled = enabled;
+      if (persist) window.localStorage.setItem("televault.infiniteScroll", String(enabled));
+      updateInfiniteToggle();
+      stopWatching();
+      infiniteLoader.classList.toggle("manual", !enabled);
+      if (!enabled && hasMore) {
+        infiniteLoader.classList.remove("failed");
+        if (loaderMessage) loaderMessage.textContent = "Infinite scroll is off";
+        if (retryButton) retryButton.textContent = "Load more";
+      } else {
+        startWatching();
+      }
+    };
 
     const loadMore = async () => {
       if (loading || !hasMore) return;
       loading = true;
       mediaGrid.setAttribute("aria-busy", "true");
       infiniteLoader.classList.remove("failed");
+      infiniteLoader.classList.add("loading");
       if (loaderMessage) loaderMessage.textContent = "Loading more media…";
       try {
         const url = new URL("/api/media", window.location.origin);
         const current = new URLSearchParams(window.location.search);
-        ["q", "kind", "sort"].forEach((key) => {
+        ["q", "kind", "sort", "seed"].forEach((key) => {
           const value = current.get(key);
           if (value) url.searchParams.set(key, value);
         });
+        if (!url.searchParams.has("seed") && infiniteLoader.dataset.seed) {
+          url.searchParams.set("seed", infiniteLoader.dataset.seed);
+        }
         url.searchParams.set("offset", infiniteLoader.dataset.offset || "0");
         const response = await fetch(url, {
           headers: { Accept: "text/html", "X-Requested-With": "TeleVault" },
@@ -51,41 +128,40 @@
         infiniteLoader.dataset.offset = response.headers.get("X-Next-Offset") || infiniteLoader.dataset.offset || "0";
         hasMore = response.headers.get("X-Has-More") === "true" && Boolean(markup.trim());
         if (!hasMore) {
-          observer?.disconnect();
+          stopWatching();
+          infiniteLoader.classList.remove("manual", "failed");
           infiniteLoader.classList.add("complete");
           if (loaderMessage) loaderMessage.textContent = "Everything is loaded";
-          window.setTimeout(() => infiniteLoader.remove(), 260);
+        } else if (!infiniteEnabled) {
+          infiniteLoader.classList.add("manual");
+          if (loaderMessage) loaderMessage.textContent = "Infinite scroll is off";
+          if (retryButton) retryButton.textContent = "Load more";
+        } else {
+          window.setTimeout(startWatching, 0);
         }
       } catch (error) {
-        observer?.unobserve(infiniteLoader);
+        stopWatching();
         infiniteLoader.classList.add("failed");
         if (loaderMessage) loaderMessage.textContent = "Could not load more media";
+        if (retryButton) retryButton.textContent = "Retry";
       } finally {
         loading = false;
+        infiniteLoader.classList.remove("loading");
         mediaGrid.setAttribute("aria-busy", "false");
       }
     };
 
     retryButton?.addEventListener("click", () => {
-      observer?.observe(infiniteLoader);
       loadMore();
     });
-
-    if ("IntersectionObserver" in window) {
-      observer = new IntersectionObserver(
-        (entries) => {
-          if (entries.some((entry) => entry.isIntersecting)) loadMore();
-        },
-        { rootMargin: "700px 0px" },
-      );
-      observer.observe(infiniteLoader);
-    } else {
-      const onScroll = () => {
-        if (infiniteLoader.getBoundingClientRect().top < window.innerHeight + 700) loadMore();
-      };
-      window.addEventListener("scroll", onScroll, { passive: true });
-      onScroll();
-    }
+    infiniteToggle?.addEventListener("click", () => applyInfiniteMode(!infiniteEnabled));
+    applyInfiniteMode(infiniteEnabled, false);
+  } else {
+    infiniteToggle?.addEventListener("click", () => {
+      infiniteEnabled = !infiniteEnabled;
+      window.localStorage.setItem("televault.infiniteScroll", String(infiniteEnabled));
+      updateInfiniteToggle();
+    });
   }
 
   const toast = document.querySelector("[data-toast]");
