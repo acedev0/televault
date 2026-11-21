@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=78", "wheel"]
+requires = ["setuptools>=84.2.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,15 +11,15 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Ace" }]
 dependencies = [
-  "fastapi==0.116.1",
-  "uvicorn[standard]==0.35.0",
-  "Telethon==1.44.0",
-  "cryptography==45.0.7",
+  "fastapi==0.162.5",
+  "uvicorn[standard]==0.54.0",
+  "Telethon==1.46.0",
+  "cryptography==50.0.2",
   "argon2-cffi==25.1.0",
   "Jinja2==3.1.6",
-  "python-multipart==0.0.20",
+  "python-multipart==0.0.32",
   "itsdangerous==2.2.0",
-  "Pillow==11.3.0",
+  "Pillow==12.3.0",
 ]
 
 [project.scripts]
